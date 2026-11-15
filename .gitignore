@@ -1,0 +1,7 @@
+hook.log
+launcher.log
+exe-path.txt
+hook.disabled
+native-dialog
+node_modules/
+*.tmp
