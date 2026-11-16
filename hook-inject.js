@@ -201,6 +201,83 @@
       return choice === 0 ? 'tray' : choice === 1 ? 'quit' : 'cancel';
     }
 
+    // 图标来源：icon.txt > 桌面快捷方式的 IconLocation > 官方 exe。
+    const resolveIconPath = () => {
+      try {
+        const { app, shell } = req('electron');
+        const cfg = path.join(HOOK_DIR, 'icon.txt');
+        if (fs.existsSync(cfg)) {
+          const line = fs.readFileSync(cfg, 'utf8').split(/\r?\n/).map((s) => s.trim()).filter(Boolean)[0];
+          if (line && fs.existsSync(line)) return line;
+        }
+        const names = ['DeepSeek Harness.lnk'];
+        const dirs = [];
+        try { dirs.push(app.getPath('desktop')); } catch (_) {}
+        for (const dir of dirs) {
+          for (const name of names) {
+            const lnk = path.join(dir, name);
+            if (!fs.existsSync(lnk)) continue;
+            const link = shell.readShortcutLink(lnk);
+            const iconPath = link.icon || link.target;
+            if (iconPath && fs.existsSync(iconPath)) return iconPath;
+          }
+        }
+      } catch (e) { out.iconLookupError = String(e && e.message); }
+      return null;
+    };
+
+    // 窗口图标（标题栏 / Alt+Tab）：WM_SETICON，窗口创建后设置。
+    const iconApplied = new WeakSet();
+    const applyWindowIcon = (win) => {
+      try {
+        if (iconApplied.has(win)) return;
+        const source = resolveIconPath();
+        if (!source) return;
+        const { app, nativeImage } = req('electron');
+        iconApplied.add(win);
+        const ext = path.extname(source).toLowerCase();
+        if (ext === '.png' || ext === '.jpg' || ext === '.jpeg' || ext === '.ico') {
+          const img = nativeImage.createFromPath(source);
+          if (img && !img.isEmpty()) { win.setIcon(img); out.icon = source; return; }
+        }
+        app.getFileIcon(source, { size: 'large' }).then((img) => {
+          if (img && !img.isEmpty()) { win.setIcon(img); out.icon = source; }
+        }).catch(() => {});
+      } catch (e) { out.iconError = String(e && e.message); }
+    };
+
+    // 任务栏按钮图标取的是进程的 AppUserModelID 所对应快捷方式的图标，
+    // 不是窗口图标；所以换一个私有 AUMID 并在开始菜单放一个同 ID 的快捷方式。
+    const AUMID = 'LuoYue.DSHCloseDialog';
+    const ensureTaskbarIdentity = () => {
+      try {
+        if (fs.existsSync(path.join(HOOK_DIR, 'no-aumid'))) { out.aumid = 'disabled'; return; }
+        const { app, shell } = req('electron');
+        app.setAppUserModelId(AUMID);
+        out.aumid = AUMID;
+        const source = resolveIconPath();
+        const exe = app.getPath('exe');
+        const startMenu = path.join(app.getPath('appData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs');
+        const lnkPath = path.join(startMenu, 'DeepSeek Harness (Close Dialog).lnk');
+        const details = {
+          target: exe,
+          cwd: path.dirname(exe),
+          description: 'DeepSeek Harness',
+          appUserModelId: AUMID,
+        };
+        if (source) {
+          const ext = path.extname(source).toLowerCase();
+          if (ext === '.exe' || ext === '.dll') details.icon = source;
+          else details.icon = source;
+          details.iconIndex = 0;
+        }
+        if (!shell.writeShortcutLink(lnkPath, 'create', details)) {
+          shell.writeShortcutLink(lnkPath, 'update', details);
+        }
+        out.shortcut = lnkPath;
+      } catch (e) { out.aumidError = String(e && e.message); }
+    };
+
     const closing = new WeakSet();
     let attached = 0;
     let overlays = 0;
@@ -252,10 +329,11 @@
       });
       attached += 1;
       ensureMarker();
+      applyWindowIcon(win);
     };
     for (const w of BrowserWindow.getAllWindows()) attach(w);
     app.on('browser-window-created', (_e, w) => attach(w));
-    if (app.isReady()) ensureMarker(); else app.whenReady().then(ensureMarker).catch(() => {});
+    if (app.isReady()) { ensureMarker(); ensureTaskbarIdentity(); } else { ensureTaskbarIdentity(); app.whenReady().then(() => { ensureMarker(); ensureTaskbarIdentity(); }).catch(() => {}); }
 
     const origHide = BrowserWindow.prototype.hide;
     BrowserWindow.prototype.hide = function (...args) {

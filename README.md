@@ -58,8 +58,10 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 -ExePath "C:\Path\To\Deep
 | 文件（与本脚本同目录） | 作用 |
 | --- | --- |
 | `exe-path.txt` | 一行客户端 exe 绝对路径；不写则自动探测 |
+| `icon.txt` | 一行图标文件路径（`.ico`/`.png`/`.exe`）；不写则用桌面快捷方式里设置的图标 |
 | `hook.disabled` | 建这个空文件 → 不注入，按官方默认行为启动 |
 | `native-dialog` | 建这个空文件 → 卡片换成系统原生对话框（无图标，因此也不响提示音） |
+| `no-aumid` | 建这个空文件 → 不改任务栏图标身份（见下节） |
 | `hook.log` | 启动与注入日志，`ok:true` 表示注入成功 |
 | `launcher.log` | 只在找不到 node 或启动失败时写入 |
 
@@ -85,6 +87,19 @@ window.on("close", (event) => {
 对话框本身通过 `webContents.executeJavaScript` 在主窗口页面里执行：遮罩、卡片、按钮都用 DOM API + CSSOM 逐条赋值创建（不注入 `<style>` 字符串，避免撞上页面 CSP），返回一个 Promise，用户选择后 `resolve('tray' | 'quit' | 'cancel')`。
 
 注入时还会预置官方的 `<userData>\background-close-confirmed` 标记，避免官方的首次提示和本对话框叠在一起。
+
+## 任务栏图标
+
+Windows 任务栏按钮的图标**不是**窗口图标（`WM_SETICON`），而是进程的 AppUserModelID 所对应的快捷方式图标。所以只改桌面快捷方式的「图标」时，标题栏和 Alt+Tab 会变，任务栏不会变。
+
+本工具的做法：
+
+1. 注入后把进程（以及其后的窗口）的 AppUserModelID 设成 `LuoYue.DSHCloseDialog`
+2. 在开始菜单里写一个同 ID 的快捷方式 `DeepSeek Harness (Close Dialog).lnk`，图标指向 `icon.txt` 或桌面快捷方式里设置的那个图标
+
+这样任务栏按钮用的就是你的图标，并且和官方启动的窗口分成两个按钮。不想动这个身份时，在同目录建一个空文件 `no-aumid`。
+
+> 注意：创建快捷方式时用的是进程自身的 `APPDATA`。如果客户端是在被收容过的环境里启动的（例如某些开发/隔离环境改了 `APPDATA`），快捷方式会落到那个环境的开始菜单里，任务栏图标就不会变。
 
 ## 为什么不是插件
 
