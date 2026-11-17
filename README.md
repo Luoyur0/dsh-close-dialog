@@ -127,3 +127,4 @@ DeepSeek Harness 的插件跑在内核 node 进程里（`ELECTRON_RUN_AS_NODE`�
 ## 相关
 
 - [EAC-Desktop](https://github.com/Ebony-Vinyl/EAC-Desktop) —— 关闭提示的交互与视觉参考
+- [Windows 任务栏图标修改指南](reference/windows-taskbar-icon.md) —— 任务栏图标取图规则、AUMID 与快捷方式的做法
