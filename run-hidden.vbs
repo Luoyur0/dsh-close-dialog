@@ -18,7 +18,7 @@ Function FindNode()
   For Each d In Split(sh.ExpandEnvironmentStrings("%PATH%"), ";")
     d = Trim(d)
     If Len(d) > 0 Then
-      If Left(d, 1) = """" And Right(d, 1) = """" Then d = Mid(d, 2, Len(d) - 2)
+      If Left(d, 1) = Chr(34) And Right(d, 1) = Chr(34) Then d = Mid(d, 2, Len(d) - 2)
       cand = d & "\node.exe"
       If fso.FileExists(cand) Then
         FindNode = cand
@@ -38,9 +38,16 @@ If Not fso.FileExists(scriptPath) Then
   fso.OpenTextFile(logPath, 8, True).WriteLine Now & " launch.js missing"
   WScript.Quit
 End If
+
+' node.exe is a console subsystem program. WScript.Shell.Exec takes no window
+' style, so the system gives it a visible console window (a brief flash).
+' Use Run with window style 0 (SW_HIDE) instead: the process runs normally and
+' its console window is hidden from the moment it is created.
+q = Chr(34)
+cmdLine = q & nodePath & q & " " & q & scriptPath & q
 On Error Resume Next
-Set execObj = sh.Exec("""" & nodePath & """ """ & scriptPath & """")
+sh.Run cmdLine, 0, False
 If Err.Number <> 0 Then
-  fso.OpenTextFile(logPath, 8, True).WriteLine Now & " exec failed: " & Err.Description
+  fso.OpenTextFile(logPath, 8, True).WriteLine Now & " run failed: " & Err.Description
   Err.Clear
 End If

@@ -51,7 +51,9 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1 -ExePath "C:\Path\To\Deep
 
 ### 为什么快捷方式指向 wscript.exe
 
-直接双击 `.cmd` 或自编译的未签名 `.exe` 时，Windows 会弹「打开文件 - 安全警告（无法验证发布者）」。把目标设成**已签名的系统程序** `wscript.exe`，再由 VBS 用 `WScript.Shell.Exec`（CreateProcess 语义）启动 node，就绕开了这条 ShellExecute 提示；wscript 本身没有控制台，所以也不会闪黑窗。
+直接双击 `.cmd` 或自编译的未签名 `.exe` 时，Windows 会弹「打开文件 - 安全警告（无法验证发布者）」。把目标设成**已签名的系统程序** `wscript.exe`，再由 VBS 启动 node，就绕开了这条 ShellExecute 提示；wscript 本身没有控制台。
+
+node.exe 是控制台程序，用 `WScript.Shell.Exec` 启动时系统会给它分配可见控制台窗口（窗口标题就是 node.exe 路径，一闪而过）。所以 `run-hidden.vbs` 用 `WScript.Shell.Run(cmd, 0, False)` 启动：窗口样式 0 = `SW_HIDE`，node 进程照常运行，控制台窗口创建即隐藏。
 
 ## 配置
 
